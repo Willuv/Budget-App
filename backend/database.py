@@ -85,6 +85,7 @@ def get_access_token():
 def cache_accounts(account_list):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("DELETE FROM accounts")
     for account in account_list:
         cursor.execute(
             """
@@ -118,6 +119,7 @@ def cache_accounts(account_list):
 def cache_transactions(transaction_list):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("DELETE FROM transactions")
     for transaction in transaction_list:
         cursor.execute(
             """

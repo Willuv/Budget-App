@@ -5,7 +5,12 @@ __pycache__/
 *.pyo
 *.pyd
 *.env
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 dist/
 build/
 *.spec
 .webview/
+.github/

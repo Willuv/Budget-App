@@ -70,15 +70,33 @@ function createChart(labels, values) {
 }
 
 function formatCurrency(value) {
-    const sign = value >= 0 ? '' : '-';
-    return `${sign}$${Math.abs(value).toFixed(2)}`;
+    return `${value >= 0 ? '' : '-'}$${Math.abs(value).toFixed(2)}`;
 }
 
 function formatDate(dateString) {
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function renderAccountSummary(accounts) {
+function renderIdentity(identity, accounts) {
+    const container = document.getElementById('identity-summary');
+    container.innerHTML = '';
+
+    if (!identity?.name) {
+        container.innerHTML = '<div class="info-message">No linked identity yet. Connect Plaid to see the account holder.</div>';
+        return;
+    }
+
+    const totalBalance = accounts.reduce((sum, account) => sum + (account.current_balance ?? 0), 0);
+    container.innerHTML = `
+        <div class="summary-item">
+            <strong>${identity.name}</strong>
+            <span>${accounts.length} linked account${accounts.length === 1 ? '' : 's'}</span>
+            <span>Combined balance: ${formatCurrency(totalBalance)}</span>
+        </div>
+    `;
+}
+
+function renderAccounts(accounts) {
     const container = document.getElementById('account-summary');
     container.innerHTML = '';
 
@@ -123,30 +141,29 @@ function renderTransactions(transactions) {
 }
 
 function renderSpendingChart(transactions) {
-    const dateMap = {};
+    const totalsByDay = {};
     const today = new Date();
 
     for (let i = 6; i >= 0; i -= 1) {
         const date = new Date(today);
         date.setDate(today.getDate() - i);
-        const key = date.toISOString().slice(0, 10);
-        dateMap[key] = 0;
+        totalsByDay[date.toISOString().slice(0, 10)] = 0;
     }
 
-    transactions.forEach(tx => {
-        if (!tx.date) return;
-        const amount = Math.abs(tx.amount ?? 0);
-        if (dateMap.hasOwnProperty(tx.date)) {
-            dateMap[tx.date] += amount;
+    transactions.forEach(transaction => {
+        if (!transaction.date) return;
+        const amount = Math.abs(transaction.amount ?? 0);
+        if (totalsByDay[transaction.date] !== undefined) {
+            totalsByDay[transaction.date] += amount;
         }
     });
 
-    const labels = Object.keys(dateMap).map(label => formatDate(label));
-    const values = Object.values(dateMap).map(value => parseFloat(value.toFixed(2)));
+    const labels = Object.keys(totalsByDay).map(label => formatDate(label));
+    const values = Object.values(totalsByDay).map(value => parseFloat(value.toFixed(2)));
     createChart(labels, values);
 }
 
-async function setFormValues(settings) {
+function populateSettingsForm(settings) {
     document.getElementById('client_id').value = settings.client_id || '';
     document.getElementById('secret').value = settings.secret || '';
     document.getElementById('env').value = settings.env || 'sandbox';
@@ -178,6 +195,25 @@ async function saveSettings(event) {
         }
     } catch (error) {
         showToast('Unable to save settings. Offline or invalid data.', false);
+    }
+}
+
+async function testSandboxConnection() {
+    const button = document.getElementById('test-sandbox-button');
+    button.disabled = true;
+    try {
+        const response = await fetch('/api/plaid/sandbox-test', { method: 'POST' });
+        const data = await response.json();
+        if (data.status === 'success') {
+            showToast('Sandbox connection succeeded.');
+            await loadAppState();
+            return;
+        }
+        showToast(data.message || 'Sandbox test failed.', false);
+    } catch (error) {
+        showToast('Sandbox test failed. Check your credentials and network.', false);
+    } finally {
+        button.disabled = false;
     }
 }
 
@@ -254,13 +290,15 @@ async function loadAppState() {
         const transactionsData = await transactionResponse.json();
 
         if (settingsData.status === 'success') {
-            await setFormValues(settingsData.settings);
+            populateSettingsForm(settingsData.settings);
         }
 
         if (transactionsData.status === 'success') {
             const accounts = transactionsData.accounts || [];
             const transactions = transactionsData.transactions || [];
-            renderAccountSummary(accounts);
+            const identity = transactionsData.identity || {};
+            renderIdentity(identity, accounts);
+            renderAccounts(accounts);
             renderTransactions(transactions);
             renderSpendingChart(transactions);
             setStatusBadge(transactionsData.linked ? 'Connected' : 'Ready to connect', transactionsData.linked);

@@ -37,6 +37,7 @@
             <div class="dashboard-grid">
                 <article class="panel summary-panel">
                     <h2>Account summary</h2>
+                    <div id="identity-summary" class="summary-list"></div>
                     <div id="account-summary" class="summary-list">
                         <div class="info-message">No account data yet. Connect Plaid to begin.</div>
                     </div>
@@ -64,7 +65,7 @@
             <div class="section-header">
                 <div>
                     <h1>Settings</h1>
-                    <p class="subtext">Store your Plaid sandbox credentials locally in a secure file.</p>
+                    <p class="subtext">Enter your Plaid sandbox credentials here and save them locally. No manual file editing is required.</p>
                 </div>
             </div>
 
@@ -88,6 +89,7 @@
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="primary-button">Save configuration</button>
+                        <button type="button" class="secondary-button" id="test-sandbox-button" onclick="testSandboxConnection()">Test sandbox connection</button>
                         <span id="settings-toast" class="toast">Saved locally.</span>
                     </div>
                 </form>

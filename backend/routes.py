@@ -11,7 +11,9 @@ from backend.database import (
 )
 from backend.plaid_client import (
     create_link_token,
+    create_sandbox_public_token,
     exchange_public_token,
+    fetch_identity,
     fetch_latest_transactions,
 )
 
@@ -20,6 +22,14 @@ api_bp = Blueprint("api", __name__)
 
 def error_response(message: str, status_code: int = 400):
     return jsonify({"status": "error", "message": message}), status_code
+
+
+def sync_plaid_data(access_token: str):
+    accounts, transactions = fetch_latest_transactions(access_token)
+    identity = fetch_identity(access_token)
+    cache_accounts(accounts)
+    cache_transactions(transactions)
+    return accounts, transactions, identity
 
 
 @api_bp.route("/")
@@ -53,6 +63,20 @@ def plaid_link_token():
         return error_response("Unable to connect to Plaid. Check your internet connection and credentials.", 502)
 
 
+@api_bp.route("/api/plaid/sandbox-test", methods=["POST"])
+def plaid_sandbox_test():
+    try:
+        public_token = create_sandbox_public_token()
+        access_token, item_id = exchange_public_token(public_token)
+        save_access_token(access_token, item_id)
+        accounts, transactions, identity = sync_plaid_data(access_token)
+        return jsonify({"status": "success", "accounts": accounts, "transactions": transactions, "identity": identity})
+    except ValueError as exc:
+        return error_response(str(exc), 422)
+    except requests.RequestException as exc:
+        return error_response(f"Failed to create a Plaid sandbox token: {str(exc)}", 502)
+
+
 @api_bp.route("/api/plaid/exchange-public-token", methods=["POST"])
 def plaid_exchange_public_token():
     data = request.get_json(silent=True) or {}
@@ -63,10 +87,8 @@ def plaid_exchange_public_token():
     try:
         access_token, item_id = exchange_public_token(public_token)
         save_access_token(access_token, item_id)
-        accounts, transactions = fetch_latest_transactions(access_token)
-        cache_accounts(accounts)
-        cache_transactions(transactions)
-        return jsonify({"status": "success", "accounts": accounts, "transactions": transactions})
+        accounts, transactions, identity = sync_plaid_data(access_token)
+        return jsonify({"status": "success", "accounts": accounts, "transactions": transactions, "identity": identity})
     except requests.RequestException:
         return error_response("Failed to exchange the public token with Plaid.", 502)
     except ValueError as exc:
@@ -80,10 +102,8 @@ def refresh_transactions():
         return error_response("No connected Plaid account found. Please connect first.", 404)
 
     try:
-        accounts, transactions = fetch_latest_transactions(access_token)
-        cache_accounts(accounts)
-        cache_transactions(transactions)
-        return jsonify({"status": "success", "accounts": accounts, "transactions": transactions})
+        accounts, transactions, identity = sync_plaid_data(access_token)
+        return jsonify({"status": "success", "accounts": accounts, "transactions": transactions, "identity": identity})
     except requests.RequestException:
         return error_response("Unable to refresh transactions. Please check the internet connection.", 502)
     except ValueError as exc:
@@ -92,11 +112,20 @@ def refresh_transactions():
 
 @api_bp.route("/api/transactions", methods=["GET"])
 def transactions_route():
+    access_token = get_access_token()
+    identity = {"name": None, "names": [], "email_addresses": [], "phone_numbers": []}
+    if access_token:
+        try:
+            identity = fetch_identity(access_token)
+        except requests.RequestException:
+            identity = {"name": None, "names": [], "email_addresses": [], "phone_numbers": []}
+
     return jsonify(
         {
             "status": "success",
-            "linked": bool(get_access_token()),
+            "linked": bool(access_token),
             "transactions": get_cached_transactions(100),
             "accounts": get_account_summary(),
+            "identity": identity,
         }
     )

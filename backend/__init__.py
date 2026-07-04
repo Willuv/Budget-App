@@ -1,7 +1,9 @@
 from pathlib import Path
+
 from flask import Flask
-from backend.routes import api_bp
+
 from backend.database import init_db
+from backend.routes import api_bp
 
 ROOT = Path(__file__).resolve().parents[1]
 
