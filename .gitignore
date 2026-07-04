@@ -1,0 +1,11 @@
+settings.json
+spending_tracker.db
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+dist/
+build/
+*.spec
+.webview/
