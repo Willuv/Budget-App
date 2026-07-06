@@ -1,108 +1,213 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spending Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <div class="navbar">
-        <div class="nav-brand">Spending Tracker</div>
-        <div class="nav-links">
-            <button class="nav-link active" id="nav-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
-            <button class="nav-link" id="nav-settings" onclick="switchTab('settings')">Settings</button>
-        </div>
-        <div class="status-group">
-            <span id="network-badge" class="badge badge-offline">Offline</span>
-            <span id="plaid-badge" class="badge badge-warning">Loading…</span>
-        </div>
+      <div class="nav-brand">Spending Tracker</div>
+      <div class="nav-links">
+        <button
+          class="nav-link active"
+          id="nav-dashboard"
+          onclick="switchTab('dashboard')"
+        >
+          Dashboard
+        </button>
+        <button class="nav-link" id="nav-budget" onclick="switchTab('budget')">
+          Budget
+        </button>
+        <button
+          class="nav-link"
+          id="nav-settings"
+          onclick="switchTab('settings')"
+        >
+          Settings
+        </button>
+      </div>
+      <div class="status-group">
+        <span id="network-badge" class="badge badge-offline">Offline</span>
+        <span id="plaid-badge" class="badge badge-warning">Loading…</span>
+      </div>
     </div>
 
     <main class="content-area">
-        <section id="tab-dashboard" class="tab-view active">
-            <div class="section-header">
-                <div>
-                    <h1>Dashboard</h1>
-                    <p class="subtext">Live spending insights and cached transaction history from your linked accounts.</p>
-                </div>
-                <div class="toolbar">
-                    <button class="primary-button" id="refresh-button" onclick="refreshData()">Refresh data</button>
-                    <button class="secondary-button" id="connect-button" onclick="openPlaidLink()">Connect Bank</button>
-                </div>
+      <section id="tab-dashboard" class="tab-view active">
+        <div class="section-header">
+          <div>
+            <h1>Dashboard</h1>
+            <p class="subtext">
+              Live spending insights and cached transaction history from your
+              linked accounts.
+            </p>
+          </div>
+          <div class="toolbar">
+            <button
+              class="primary-button"
+              id="refresh-button"
+              onclick="refreshData()"
+            >
+              Refresh data
+            </button>
+            <button
+              class="secondary-button"
+              id="connect-button"
+              onclick="openPlaidLink()"
+            >
+              Connect Bank
+            </button>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel summary-panel">
+            <h2>Account summary</h2>
+            <div id="identity-summary" class="summary-list"></div>
+            <div id="account-summary" class="summary-list">
+              <div class="info-message">
+                No account data yet. Connect Plaid to begin.
+              </div>
             </div>
+          </article>
 
-            <div class="dashboard-grid">
-                <article class="panel summary-panel">
-                    <h2>Account summary</h2>
-                    <div id="identity-summary" class="summary-list"></div>
-                    <div id="account-summary" class="summary-list">
-                        <div class="info-message">No account data yet. Connect Plaid to begin.</div>
-                    </div>
-                </article>
-
-                <article class="panel chart-panel">
-                    <h2>Spending trends</h2>
-                    <div class="chart-frame">
-                        <canvas id="spendingChart"></canvas>
-                    </div>
-                </article>
+          <article class="panel chart-panel">
+            <h2>Spending trends</h2>
+            <div class="chart-frame">
+              <canvas id="spendingChart"></canvas>
             </div>
+          </article>
+        </div>
 
-            <article class="panel transactions-panel">
-                <div class="panel-heading">
-                    <h2>Recent transactions</h2>
-                </div>
-                <div id="transaction-list" class="transaction-list">
-                    <div class="info-message">No transactions cached yet.</div>
-                </div>
-            </article>
-        </section>
+        <article class="panel transactions-panel">
+          <div class="panel-heading">
+            <h2>Recent transactions</h2>
+          </div>
+          <div id="transaction-list" class="transaction-list">
+            <div class="info-message">No transactions cached yet.</div>
+          </div>
+        </article>
+      </section>
 
-        <section id="tab-settings" class="tab-view">
-            <div class="section-header">
-                <div>
-                    <h1>Settings</h1>
-                    <p class="subtext">Enter your Plaid sandbox credentials here and save them locally. No manual file editing is required.</p>
-                </div>
+      <section id="tab-budget" class="tab-view">
+        <div class="section-header">
+          <div>
+            <h1>Budget</h1>
+            <p class="subtext">
+              Set your payroll as income and split your monthly spending into
+              expense categories like rent, food, insurance, and utilities.
+            </p>
+          </div>
+        </div>
+
+        <article class="panel budget-panel">
+          <div class="budget-summary">
+            <div>
+              <label for="budget-income">Payroll income</label>
+              <input
+                id="budget-income"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
             </div>
+            <div class="budget-balance-card">
+              <span>Allocated</span>
+              <strong id="budget-total">$0.00</strong>
+            </div>
+            <div class="budget-balance-card">
+              <span>Remaining</span>
+              <strong id="budget-remaining">$0.00</strong>
+            </div>
+          </div>
 
-            <article class="panel settings-panel">
-                <form id="settings-form" onsubmit="saveSettings(event)">
-                    <div class="form-row">
-                        <label for="client_id">Plaid Client ID</label>
-                        <input id="client_id" type="text" autocomplete="off" required />
-                    </div>
-                    <div class="form-row">
-                        <label for="secret">Plaid Secret</label>
-                        <input id="secret" type="password" autocomplete="new-password" required />
-                    </div>
-                    <div class="form-row">
-                        <label for="env">Plaid Environment</label>
-                        <select id="env">
-                            <option value="sandbox">Sandbox</option>
-                            <option value="development">Development</option>
-                            <option value="production">Production</option>
-                        </select>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="primary-button">Save configuration</button>
-                        <button type="button" class="secondary-button" id="test-sandbox-button" onclick="testSandboxConnection()">Test sandbox connection</button>
-                        <span id="settings-toast" class="toast">Saved locally.</span>
-                    </div>
-                </form>
-            </article>
+          <div class="budget-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              onclick="addBudgetCategory()"
+            >
+              Add category
+            </button>
+            <button type="button" class="primary-button" onclick="saveBudget()">
+              Save budget
+            </button>
+          </div>
 
-            <article class="panel help-panel">
-                <h2>Security notes</h2>
-                <p class="help-copy">Credentials are kept on your machine only in <code>settings.json</code>. This app never hardcodes API keys.</p>
-            </article>
-        </section>
+          <div id="budget-categories" class="budget-category-list"></div>
+        </article>
+      </section>
+
+      <section id="tab-settings" class="tab-view">
+        <div class="section-header">
+          <div>
+            <h1>Settings</h1>
+            <p class="subtext">
+              Enter your Plaid sandbox credentials here and save them locally.
+              No manual file editing is required.
+            </p>
+          </div>
+        </div>
+
+        <article class="panel settings-panel">
+          <form id="settings-form" onsubmit="saveSettings(event)">
+            <div class="form-row">
+              <label for="client_id">Plaid Client ID</label>
+              <input id="client_id" type="text" autocomplete="off" required />
+            </div>
+            <div class="form-row">
+              <label for="secret">Plaid Secret</label>
+              <input
+                id="secret"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
+            </div>
+            <div class="form-row">
+              <label for="env">Plaid Environment</label>
+              <select id="env">
+                <option value="sandbox">Sandbox</option>
+                <option value="development">Development</option>
+                <option value="production">Production</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="primary-button">
+                Save configuration
+              </button>
+              <button
+                type="button"
+                class="secondary-button"
+                id="test-sandbox-button"
+                onclick="testSandboxConnection()"
+              >
+                Test sandbox connection
+              </button>
+              <span id="settings-toast" class="toast">Saved locally.</span>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel help-panel">
+          <h2>Security notes</h2>
+          <p class="help-copy">
+            Credentials are kept on your machine only in
+            <code>settings.json</code>. This app never hardcodes API keys.
+          </p>
+        </article>
+      </section>
     </main>
 
     <div id="toast" class="global-toast"></div>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-</body>
+  </body>
 </html>

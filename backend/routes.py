@@ -1,5 +1,6 @@
 import requests
-from flask import Blueprint, jsonify, render_template, request
+from datetime import date
+from flask import Blueprint, jsonify, render_template, request, send_from_directory
 from backend.config import load_settings, save_settings
 from backend.database import (
     cache_accounts,
@@ -7,6 +8,7 @@ from backend.database import (
     get_access_token,
     get_account_summary,
     get_cached_transactions,
+    get_transactions_by_month,
     save_access_token,
 )
 from backend.plaid_client import (
@@ -39,6 +41,11 @@ def index():
     return render_template("index.html", has_keys=has_keys)
 
 
+@api_bp.route("/favicon.ico")
+def favicon():
+    return send_from_directory("static", "favicon.svg", mimetype="image/svg+xml")
+
+
 @api_bp.route("/api/settings", methods=["GET", "POST"])
 def settings_route():
     if request.method == "POST":
@@ -50,6 +57,39 @@ def settings_route():
         return jsonify({"status": "success", "settings": saved})
 
     return jsonify({"status": "success", "settings": load_settings()})
+
+
+@api_bp.route("/api/budget", methods=["GET", "POST"])
+def budget_route():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        budget = data.get("budget") or data
+        categories = []
+        for item in budget.get("categories", []) or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip() or "Category"
+            try:
+                amount = float(item.get("amount", 0) or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            categories.append({"name": name, "amount": amount})
+
+        try:
+            income = float(budget.get("income", 0) or 0)
+        except (TypeError, ValueError):
+            income = 0.0
+
+        settings = load_settings()
+        saved = save_settings(settings["client_id"], settings["secret"], settings["env"], {"income": income, "categories": categories})
+        return jsonify({"status": "success", "budget": saved["budget"]})
+
+    settings = load_settings()
+    budget = settings.get("budget") or {"income": 0, "categories": []}
+    if not budget.get("categories") and not budget.get("income"):
+        from backend.database import get_budget_suggestions
+        budget = get_budget_suggestions()
+    return jsonify({"status": "success", "budget": budget})
 
 
 @api_bp.route("/api/plaid-link-token", methods=["GET"])
@@ -114,17 +154,26 @@ def refresh_transactions():
 def transactions_route():
     access_token = get_access_token()
     identity = {"name": None, "names": [], "email_addresses": [], "phone_numbers": []}
+    
     if access_token:
         try:
             identity = fetch_identity(access_token)
         except requests.RequestException:
-            identity = {"name": None, "names": [], "email_addresses": [], "phone_numbers": []}
+            pass
+
+    # Default to current calendar month
+    today = date.today()
+    year = request.args.get("year", default=today.year, type=int)
+    month = request.args.get("month", default=today.month, type=int)
+
+    # Fetch filtered transactions
+    transactions = get_transactions_by_month(year, month)
 
     return jsonify(
         {
             "status": "success",
             "linked": bool(access_token),
-            "transactions": get_cached_transactions(100),
+            "transactions": transactions,
             "accounts": get_account_summary(),
             "identity": identity,
         }

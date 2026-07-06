@@ -102,7 +102,7 @@ def create_sandbox_public_token(institution_id: str = "ins_109508", products=Non
     return payload["public_token"]
 
 
-def fetch_latest_transactions(access_token: str, days_back: int = 30):
+def fetch_latest_transactions(access_token: str, days_back: int = 60):
     auth_payload, env = _auth_payload()
     start_date = (date.today() - timedelta(days=days_back)).isoformat()
     end_date = date.today().isoformat()

@@ -116,6 +116,13 @@ def cache_accounts(account_list):
     conn.close()
 
 
+def normalize_transaction_amount(amount):
+    try:
+        return -float(amount or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def cache_transactions(transaction_list):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -140,7 +147,7 @@ def cache_transactions(transaction_list):
                 transaction.get("transaction_id"),
                 transaction.get("account_id"),
                 transaction.get("name"),
-                transaction.get("amount"),
+                normalize_transaction_amount(transaction.get("amount")),
                 transaction.get("date"),
                 ", ".join(transaction.get("category", [])[:2]) if transaction.get("category") else "",
                 transaction.get("location", {}).get("city"),
@@ -165,5 +172,54 @@ def get_cached_transactions(limit=50):
 def get_account_summary():
     conn = get_db_connection()
     rows = conn.execute("SELECT * FROM accounts ORDER BY name ASC").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_budget_suggestions():
+    transactions = get_cached_transactions(200)
+    payroll_total = 0.0
+    category_totals = {}
+
+    for transaction in transactions:
+        amount = float(transaction.get("amount") or 0)
+        name = (transaction.get("name") or "").strip().lower()
+        category = (transaction.get("category") or "").strip()
+
+        if amount > 0 and any(keyword in name for keyword in ["payroll", "salary", "paycheck", "direct deposit", "deposit"]):
+            payroll_total += amount
+            continue
+
+        if amount < 0:
+            category_key = category or "Other"
+            category_totals[category_key] = category_totals.get(category_key, 0.0) + abs(amount)
+
+    categories = []
+    for name, amount in sorted(category_totals.items(), key=lambda item: item[1], reverse=True)[:6]:
+        categories.append({"name": name, "amount": round(amount, 2)})
+
+    if not categories:
+        categories = [
+            {"name": "Rent", "amount": 0},
+            {"name": "Food", "amount": 0},
+            {"name": "Insurance", "amount": 0},
+            {"name": "Utilities", "amount": 0},
+            {"name": "Transportation", "amount": 0},
+        ]
+
+    return {"income": round(payroll_total, 2), "categories": categories}
+
+
+def get_transactions_by_month(year: int, month: int):
+    """Fetches transactions strictly for a specific calendar month."""
+    conn = get_db_connection()
+    # Format as YYYY-MM for SQL string matching
+    month_str = f"{year:04d}-{month:02d}"
+    
+    rows = conn.execute(
+        "SELECT * FROM transactions WHERE strftime('%Y-%m', date) = ? ORDER BY date DESC, imported_at DESC",
+        (month_str,)
+    ).fetchall()
+    
     conn.close()
     return [dict(row) for row in rows]
